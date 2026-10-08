@@ -7,12 +7,13 @@ export const metadata = {
 
 export default function DashboardLayout({ children }) {
   return (
-    <div className="min-h-screen bg-bg-primary flex">
-      {/* Left Sidebar */}
+    <div className="min-h-screen bg-bg-primary bg-trading-grid relative flex overflow-hidden">
+      <div className="glow-ambient-gold top-[-100px] left-[200px]" />
+      <div className="glow-ambient-emerald bottom-[-100px] right-[100px]" />
+
       <Sidebar />
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 z-10">
         <Navbar />
         <main className="flex-1 p-6 md:p-8 overflow-y-auto">
           {children}

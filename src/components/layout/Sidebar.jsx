@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -13,8 +14,6 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  TrendingUp,
-  Activity,
 } from 'lucide-react';
 
 const iconMap = {
@@ -41,16 +40,20 @@ export default function Sidebar() {
 
   return (
     <motion.aside
-      animate={{ width: collapsed ? 76 : 240 }}
+      animate={{ width: collapsed ? 76 : 260 }}
       transition={{ duration: 0.25, ease: 'easeInOut' }}
-      className="relative flex flex-col border-r border-border-primary bg-bg-card min-h-screen z-30 select-none"
+      className="relative flex flex-col border-r border-border-primary bg-bg-card/90 backdrop-blur-md min-h-screen z-30 select-none"
     >
-      {/* Brand Header */}
-      <div className="h-16 flex items-center justify-between px-4 border-b border-border-primary">
-        <Link href="/dashboard" className="flex items-center gap-3 overflow-hidden">
-          <div className="min-w-8 h-8 rounded-lg bg-accent-gold flex items-center justify-center shadow-md shadow-accent-gold/20">
-            <TrendingUp className="w-5 h-5 text-black font-bold" />
-          </div>
+      <div className="h-20 flex items-center justify-between px-4 border-b border-border-primary">
+        <Link href="/" className="flex items-center gap-3 overflow-hidden w-full group">
+          <Image
+            src="/logo.png"
+            alt="DC Funded Trader Logo"
+            width={280}
+            height={80}
+            className="h-12 w-auto object-contain shrink-0 group-hover:opacity-90 transition-opacity"
+            priority
+          />
           <AnimatePresence>
             {!collapsed && (
               <motion.span
@@ -58,7 +61,7 @@ export default function Sidebar() {
                 animate={{ opacity: 1, width: 'auto' }}
                 exit={{ opacity: 0, width: 0 }}
                 transition={{ duration: 0.2 }}
-                className="font-bold text-base tracking-tight whitespace-nowrap text-text-primary"
+                className="font-extrabold text-xl tracking-tight whitespace-nowrap text-text-primary shrink-0 group-hover:text-text-primary"
               >
                 Trade<span className="text-accent-gold">Lab</span>
               </motion.span>
@@ -67,11 +70,10 @@ export default function Sidebar() {
         </Link>
       </div>
 
-      {/* Collapse Toggle Button */}
       <button
         type="button"
         onClick={() => setCollapsed(!collapsed)}
-        className="absolute -right-3 top-20 w-6 h-6 rounded-full bg-bg-secondary border border-border-primary text-text-muted hover:text-text-primary flex items-center justify-center transition-colors z-40 cursor-pointer shadow-sm"
+        className="absolute -right-3 top-24 w-6 h-6 rounded-full bg-bg-secondary border border-border-primary text-text-muted hover:text-text-primary flex items-center justify-center transition-colors z-40 cursor-pointer shadow-md"
         aria-label="Toggle sidebar width"
       >
         {collapsed ? (
@@ -81,7 +83,6 @@ export default function Sidebar() {
         )}
       </button>
 
-      {/* Navigation Links */}
       <nav className="flex-1 px-3 py-6 space-y-1.5 overflow-y-auto">
         {navigation.map((item) => {
           const Icon = iconMap[item.icon];
@@ -95,7 +96,7 @@ export default function Sidebar() {
                 relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150
                 ${
                   isActive
-                    ? 'bg-accent-gold/10 text-accent-gold border border-accent-gold/20 font-semibold'
+                    ? 'bg-accent-gold/10 text-accent-gold border border-accent-gold/20 font-semibold shadow-sm'
                     : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
                 }
               `}
@@ -131,7 +132,7 @@ export default function Sidebar() {
 
       <div className="p-3 border-t border-border-primary">
         <div
-          className={`flex items-center gap-2.5 px-3 py-2 rounded-lg bg-bg-tertiary ${
+          className={`flex items-center gap-2.5 px-3 py-2 rounded-lg bg-bg-tertiary/70 border border-border-primary/50 ${
             collapsed ? 'justify-center' : ''
           }`}
         >

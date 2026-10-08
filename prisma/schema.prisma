@@ -1,0 +1,78 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        String     @id @default(uuid())
+  email     String     @unique
+  password  String
+  name      String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  backtests Backtest[]
+}
+
+model Strategy {
+  id          String     @id @default(uuid())
+  name        String
+  code        String     @unique
+  description String?    @db.VarChar(500)
+  parameters  Json
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  backtests   Backtest[]
+}
+
+model Backtest {
+  id             String    @id @default(uuid())
+  userId         String?
+  strategyId     String
+  market         String
+  timeframe      String
+  initialCapital Float
+  riskPerTrade   Float
+  startDate      DateTime
+  endDate        DateTime
+  createdAt      DateTime  @default(now())
+  
+  user           User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  strategy       Strategy  @relation(fields: [strategyId], references: [id])
+  trades         Trade[]
+  result         Result?
+}
+
+model Trade {
+  id         String   @id @default(uuid())
+  backtestId String
+  direction  String
+  entryPrice Float
+  entryTime  DateTime
+  exitPrice  Float
+  exitTime   DateTime
+  quantity   Float
+  pnl        Float
+  returnPct  Float
+  feePaid    Float
+  
+  backtest   Backtest @relation(fields: [backtestId], references: [id], onDelete: Cascade)
+
+  @@index([backtestId])
+}
+
+model Result {
+  id             String   @id @default(uuid())
+  backtestId     String   @unique
+  finalCapital   Float
+  totalReturnPct Float
+  totalTrades    Int
+  winRate        Float
+  profitFactor   Float
+  maxDrawdown    Float
+  
+  backtest       Backtest @relation(fields: [backtestId], references: [id], onDelete: Cascade)
+}
