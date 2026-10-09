@@ -2,39 +2,6 @@ export const APP_NAME = 'TradeLab';
 export const APP_DESCRIPTION =
   'Professional algorithmic trading backtesting platform';
 
-export const NAVIGATION_ITEMS = [
-  {
-    label: 'Dashboard',
-    href: '/dashboard',
-    icon: 'LayoutDashboard',
-  },
-  {
-    label: 'Backtester',
-    href: '/backtester',
-    icon: 'FlaskConical',
-  },
-  {
-    label: 'Strategies',
-    href: '/strategies',
-    icon: 'Brain',
-  },
-  {
-    label: 'Trades',
-    href: '/trades',
-    icon: 'ArrowLeftRight',
-  },
-  {
-    label: 'Analytics',
-    href: '/analytics',
-    icon: 'BarChart3',
-  },
-  {
-    label: 'Settings',
-    href: '/settings',
-    icon: 'Settings',
-  },
-];
-
 export const SUPPORTED_MARKETS = [
   { value: 'BTC/USD', label: 'BTC/USD (Bitcoin)', type: 'crypto' },
   { value: 'ETH/USD', label: 'ETH/USD (Ethereum)', type: 'crypto' },
@@ -73,5 +40,25 @@ export const STRATEGIES = [
     value: 'bollinger',
     label: 'Bollinger Bands Mean Reversion',
     description: 'Price standard deviation bands for breakout/mean reversion',
+  },
+  {
+    value: 'stochastic',
+    label: 'Stochastic Oscillator',
+    description: 'Stochastic %K/%D crossover with overbought and oversold filters',
+  },
+  {
+    value: 'supertrend',
+    label: 'Supertrend',
+    description: 'ATR-based trailing stop trend-following system',
+  },
+  {
+    value: 'cci',
+    label: 'CCI Reversal',
+    description: 'Commodity Channel Index mean reversion at extreme levels',
+  },
+  {
+    value: 'ema_rsi_combo',
+    label: 'EMA + RSI Combo',
+    description: 'EMA crossover confirmed by RSI momentum filter',
   },
 ];

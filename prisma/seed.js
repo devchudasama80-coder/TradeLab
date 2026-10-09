@@ -47,6 +47,56 @@ async function main() {
     },
   });
 
+    await prisma.strategy.upsert({
+    where: { code: 'stochastic' },
+    update: {},
+    create: {
+      name: 'Stochastic Oscillator',
+      code: 'stochastic',
+      description: 'Stochastic %K/%D crossover with overbought and oversold filters',
+      parameters: { kPeriod: 14, dPeriod: 3, oversold: 20, overbought: 80 },
+    },
+  });
+
+  await prisma.strategy.upsert({
+    where: { code: 'supertrend' },
+    update: {},
+    create: {
+      name: 'Supertrend',
+      code: 'supertrend',
+      description: 'ATR-based trailing stop trend-following system',
+      parameters: { period: 10, multiplier: 3 },
+    },
+  });
+
+  await prisma.strategy.upsert({
+    where: { code: 'cci' },
+    update: {},
+    create: {
+      name: 'CCI Reversal',
+      code: 'cci',
+      description: 'Commodity Channel Index mean reversion at extreme levels',
+      parameters: { period: 20, oversold: -100, overbought: 100 },
+    },
+  });
+
+  await prisma.strategy.upsert({
+    where: { code: 'ema_rsi_combo' },
+    update: {},
+    create: {
+      name: 'EMA + RSI Combo',
+      code: 'ema_rsi_combo',
+      description: 'EMA crossover confirmed by RSI momentum filter',
+      parameters: {
+        fastPeriod: 20,
+        slowPeriod: 50,
+        rsiPeriod: 14,
+        rsiOversold: 40,
+        rsiOverbought: 60,
+      },
+    },
+  });
+
   await prisma.strategy.upsert({
     where: { code: 'bollinger' },
     update: {},

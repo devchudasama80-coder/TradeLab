@@ -46,6 +46,7 @@ export async function POST(request) {
       timeframe,
       candleCount: candles.length,
       result: backtestResult,
+      candles,
     });
   } catch (error) {
     console.error('Backtest API Error:', error);
@@ -82,5 +83,6 @@ export async function GET(request) {
     strategy,
     candleCount: candles.length,
     result,
+    candles,
   });
 }

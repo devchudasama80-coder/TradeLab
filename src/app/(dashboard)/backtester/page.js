@@ -1,29 +1,307 @@
-import Card from '@/components/ui/Card';
-import { FlaskConical } from 'lucide-react';
+'use client';
+
+import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
+import BacktestForm from '@/components/backtest/BacktestForm';
+import TradingViewChart from '@/components/charts/TradingViewChart';
+import EquityChart from '@/components/charts/EquityChart';
+import TradeTable from '@/components/backtest/TradeTable';
+import {
+  TrendingUp,
+  Percent,
+  Activity,
+  ArrowDownRight,
+  Loader2,
+  Clock,
+  Calendar,
+  Zap,
+} from 'lucide-react';
 
 export default function BacktesterPage() {
+  const [config, setConfig] = useState({
+    strategy: 'ma_crossover',
+    symbol: 'BTC/USD',
+    timeframe: '1h',
+    initialCapital: 10000,
+    riskPerTrade: 1.0,
+    parameters: {
+      fastPeriod: 20,
+      slowPeriod: 50,
+    },
+  });
+
+  const [loading, setLoading] = useState(false);
+  const [backtestResult, setBacktestResult] = useState(null);
+  const [candles, setCandles] = useState([]);
+  const [activeSymbol, setActiveSymbol] = useState('BTC/USD');
+
+  const executeBacktest = async (targetConfig = config) => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/backtests/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          strategy: targetConfig.strategy,
+          symbol: targetConfig.symbol,
+          timeframe: targetConfig.timeframe,
+          initialCapital: Number(targetConfig.initialCapital),
+          riskPerTrade: Number(targetConfig.riskPerTrade) / 100,
+          parameters: targetConfig.parameters,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error(data.error || 'Backtest failed.');
+        return;
+      }
+
+      setBacktestResult(data.result);
+      if (data.candles) {
+        setCandles(data.candles);
+      }
+      setActiveSymbol(targetConfig.symbol);
+      toast.success(
+        `Executed ${targetConfig.strategy.toUpperCase()} in ${data.result.executionTimeMs}ms!`
+      );
+    } catch (err) {
+      toast.error('An error occurred during backtest execution.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadInitial() {
+      setLoading(true);
+      try {
+        const res = await fetch('/api/backtests/run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            strategy: 'ma_crossover',
+            symbol: 'BTC/USD',
+            timeframe: '1h',
+            initialCapital: 10000,
+            riskPerTrade: 0.01,
+            parameters: { fastPeriod: 20, slowPeriod: 50 },
+          }),
+        });
+
+        const data = await res.json();
+        if (isMounted && res.ok) {
+          setBacktestResult(data.result);
+          if (data.candles) {
+            setCandles(data.candles);
+          }
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+
+    loadInitial();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const isProfit = backtestResult?.totalReturnPct >= 0;
+
+  const startDateStr = backtestResult?.startTimestamp
+    ? new Date(backtestResult.startTimestamp * 1000).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    : '';
+
+  const endDateStr = backtestResult?.endTimestamp
+    ? new Date(backtestResult.endTimestamp * 1000).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    : '';
+
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="max-w-[1600px] mx-auto space-y-4">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-text-primary">
-          Backtesting Engine
+        <h1 className="text-xl md:text-2xl font-bold tracking-tight text-text-primary">
+          Backtesting Terminal
         </h1>
-        <p className="text-sm text-text-secondary mt-1">
-          Configure strategy rules, select historical market data, and simulate trades.
+        <p className="text-xs text-text-muted mt-0.5">
+          Execute strategy backtests on Binance market candles
         </p>
       </div>
 
-      <Card className="flex flex-col items-center justify-center text-center py-20 border-dashed">
-        <div className="w-12 h-12 rounded-xl bg-accent-gold/10 flex items-center justify-center text-accent-gold mb-4">
-          <FlaskConical className="w-6 h-6" />
-        </div>
-        <h2 className="text-lg font-bold text-text-primary">
-          Backtester Engine Setup Ready
-        </h2>
-        <p className="text-sm text-text-muted max-w-md mt-1">
-          In Phase 6 & 7 we will integrate the Moving Average engine and TradingView charts right here!
-        </p>
-      </Card>
+      <BacktestForm
+        config={config}
+        setConfig={setConfig}
+        onRun={() => executeBacktest(config)}
+        loading={loading}
+      />
+
+      <div className="space-y-4">
+        {loading && (
+          <div className="h-96 rounded-xl border border-border-primary bg-bg-card flex flex-col items-center justify-center gap-3">
+            <Loader2 className="w-6 h-6 animate-spin text-accent-gold" />
+            <span className="text-xs font-mono text-text-muted">
+              Fetching candles for {config.symbol} & running strategy engine...
+            </span>
+          </div>
+        )}
+
+        {!loading && backtestResult && (
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-bg-card border border-border-primary text-xs font-mono">
+              <div className="flex items-center gap-2 text-text-secondary">
+                <Calendar className="w-3.5 h-3.5 text-accent-gold" />
+                <span>
+                  Period: <strong className="text-text-primary">{startDateStr}</strong> →{' '}
+                  <strong className="text-text-primary">{endDateStr}</strong> ({backtestResult.durationDays} Days)
+                </span>
+              </div>
+
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-1.5 text-text-secondary">
+                  <Clock className="w-3.5 h-3.5 text-accent-gold" />
+                  <span>
+                    Candles: <strong className="text-text-primary">{candles.length}</strong>
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-1.5 text-profit font-semibold">
+                  <Zap className="w-3.5 h-3.5 text-profit" />
+                  <span>Execution: {backtestResult.executionTimeMs}ms</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="bg-bg-card border border-border-primary rounded-xl p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">
+                    Final Capital
+                  </span>
+                  <TrendingUp
+                    className={`w-3.5 h-3.5 ${
+                      isProfit ? 'text-profit' : 'text-loss'
+                    }`}
+                  />
+                </div>
+                <div className="text-xl font-mono font-bold text-text-primary">
+                  $
+                  {backtestResult.finalCapital.toLocaleString('en-US', {
+                    minimumFractionDigits: 2,
+                  })}
+                </div>
+                <div
+                  className={`text-xs font-mono mt-1 ${
+                    isProfit ? 'text-profit' : 'text-loss'
+                  }`}
+                >
+                  {isProfit ? '+' : ''}
+                  {backtestResult.totalReturnPct}%
+                </div>
+              </div>
+
+              <div className="bg-bg-card border border-border-primary rounded-xl p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">
+                    Win Rate
+                  </span>
+                  <Percent className="w-3.5 h-3.5 text-accent-gold" />
+                </div>
+                <div className="text-xl font-mono font-bold text-text-primary">
+                  {backtestResult.winRate}%
+                </div>
+                <div className="text-xs font-mono mt-1 text-text-muted">
+                  {backtestResult.winningTrades}/{backtestResult.totalTrades}{' '}
+                  wins
+                </div>
+              </div>
+
+              <div className="bg-bg-card border border-border-primary rounded-xl p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">
+                    Profit Factor
+                  </span>
+                  <Activity className="w-3.5 h-3.5 text-accent-gold" />
+                </div>
+                <div className="text-xl font-mono font-bold text-text-primary">
+                  {backtestResult.profitFactor}
+                </div>
+                <div className="text-xs font-mono mt-1 text-text-muted">
+                  Gross win / loss
+                </div>
+              </div>
+
+              <div className="bg-bg-card border border-border-primary rounded-xl p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">
+                    Max Drawdown
+                  </span>
+                  <ArrowDownRight className="w-3.5 h-3.5 text-loss" />
+                </div>
+                <div className="text-xl font-mono font-bold text-text-primary">
+                  {backtestResult.maxDrawdownPct}%
+                </div>
+                <div className="text-xs font-mono mt-1 text-text-muted">
+                  Peak to trough
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {!loading && candles.length > 0 && (
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between px-1">
+              <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider">
+                Price Chart · Trade Signals
+              </h3>
+              <span className="text-[10px] font-mono text-text-muted">
+                {candles.length} candles · {activeSymbol}
+              </span>
+            </div>
+            <TradingViewChart
+              key={`${activeSymbol}-${config.timeframe}-${config.strategy}-${candles.length}`}
+              candles={candles}
+              trades={backtestResult?.trades || []}
+            />
+          </div>
+        )}
+
+        {!loading && backtestResult && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            <div className="lg:col-span-5 space-y-1.5">
+              <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider px-1">
+                Equity Curve
+              </h3>
+              <EquityChart equityCurve={backtestResult.equityCurve || []} />
+            </div>
+
+            <div className="lg:col-span-7 space-y-1.5">
+              <div className="flex items-center justify-between px-1">
+                <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider">
+                  Execution Log
+                </h3>
+                <span className="text-[10px] font-mono text-text-muted">
+                  {backtestResult.totalTrades} trades
+                </span>
+              </div>
+              <TradeTable trades={backtestResult.trades || []} />
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

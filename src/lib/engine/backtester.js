@@ -1,6 +1,8 @@
 import { getStrategySignals } from './strategies';
 
 export function runBacktest(strategyCode, candles, options = {}) {
+  const startTimeMs = performance.now();
+
   const {
     initialCapital = 10000,
     riskPerTrade = 0.01,
@@ -106,6 +108,15 @@ export function runBacktest(strategyCode, candles, options = {}) {
 
   const totalReturnPct = ((capital - initialCapital) / initialCapital) * 100;
 
+  const endTimeMs = performance.now();
+  const executionTimeMs = parseFloat((endTimeMs - startTimeMs).toFixed(2));
+
+  const startTimestamp = candles[0].time;
+  const endTimestamp = candles[candles.length - 1].time;
+  const durationDays = parseFloat(
+    ((endTimestamp - startTimestamp) / (60 * 60 * 24)).toFixed(1)
+  );
+
   return {
     strategyCode,
     initialCapital,
@@ -117,6 +128,10 @@ export function runBacktest(strategyCode, candles, options = {}) {
     winRate: parseFloat(winRate.toFixed(1)),
     profitFactor: parseFloat(profitFactor.toFixed(2)),
     maxDrawdownPct: parseFloat(maxDrawdownPct.toFixed(1)),
+    executionTimeMs,
+    startTimestamp,
+    endTimestamp,
+    durationDays,
     trades,
     equityCurve,
   };

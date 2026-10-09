@@ -4,7 +4,11 @@ const BINANCE_SYMBOL_MAP = {
   'SOL/USD': 'SOLUSDT',
   'EUR/USD': 'EURUSDT',
   'GBP/USD': 'GBPUSDT',
-  'USD/JPY': 'USDJPY',
+  'USD/JPY': 'BTCUSDT',
+  'BTCUSDT': 'BTCUSDT',
+  'ETHUSDT': 'ETHUSDT',
+  'SOLUSDT': 'SOLUSDT',
+  'EURUSDT': 'EURUSDT',
 };
 
 const TIMEFRAME_MAP = {
@@ -18,7 +22,7 @@ const TIMEFRAME_MAP = {
 
 export async function fetchHistoricalCandles(symbol = 'BTC/USD', interval = '1h', limit = 500) {
   try {
-    const apiSymbol = BINANCE_SYMBOL_MAP[symbol] || symbol.replace('/', '');
+    const apiSymbol = BINANCE_SYMBOL_MAP[symbol] || 'BTCUSDT';
     const apiInterval = TIMEFRAME_MAP[interval] || '1h';
 
     const response = await fetch(
@@ -27,12 +31,28 @@ export async function fetchHistoricalCandles(symbol = 'BTC/USD', interval = '1h'
     );
 
     if (!response.ok) {
-      throw new Error(`Market data provider HTTP error: ${response.status}`);
+      console.warn(`Binance API returned status ${response.status} for ${apiSymbol}. Using fallback.`);
+      const fallbackResponse = await fetch(
+        `https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=${apiInterval}&limit=${limit}`,
+        { cache: 'no-store' }
+      );
+      if (!fallbackResponse.ok) return [];
+      const fallbackData = await fallbackResponse.json();
+      return parseCandles(fallbackData);
     }
 
     const rawData = await response.json();
+    return parseCandles(rawData);
+  } catch (error) {
+    console.error('Error in fetchHistoricalCandles:', error);
+    return [];
+  }
+}
 
-    const sanitizedCandles = rawData.map((d) => ({
+function parseCandles(rawData) {
+  if (!Array.isArray(rawData)) return [];
+  return rawData
+    .map((d) => ({
       timestamp: d[0],
       time: Math.floor(d[0] / 1000),
       open: parseFloat(d[1]),
@@ -40,11 +60,6 @@ export async function fetchHistoricalCandles(symbol = 'BTC/USD', interval = '1h'
       low: parseFloat(d[3]),
       close: parseFloat(d[4]),
       volume: parseFloat(d[5]),
-    }));
-
-    return sanitizedCandles.sort((a, b) => a.timestamp - b.timestamp);
-  } catch (error) {
-    console.error('Error in fetchHistoricalCandles:', error);
-    return [];
-  }
+    }))
+    .sort((a, b) => a.timestamp - b.timestamp);
 }
