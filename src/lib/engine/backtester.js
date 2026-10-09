@@ -1,20 +1,19 @@
-import { calculateEMA } from '@/lib/indicators/ema';
+import { getStrategySignals } from './strategies';
 
-export function runMACrossoverBacktest(candles, options = {}) {
+export function runBacktest(strategyCode, candles, options = {}) {
   const {
-    fastPeriod = 20,
-    slowPeriod = 50,
     initialCapital = 10000,
     riskPerTrade = 0.01,
     feeRate = 0.001,
+    slippagePct = 0.0005,
+    parameters = {},
   } = options;
 
-  if (!candles || candles.length < slowPeriod) {
+  if (!candles || candles.length < 20) {
     return null;
   }
 
-  const fastEMA = calculateEMA(candles, fastPeriod);
-  const slowEMA = calculateEMA(candles, slowPeriod);
+  const signals = getStrategySignals(strategyCode, candles, parameters);
 
   let capital = initialCapital;
   let position = null;
@@ -23,20 +22,13 @@ export function runMACrossoverBacktest(candles, options = {}) {
   let peakCapital = initialCapital;
   let maxDrawdownPct = 0;
 
-  for (let i = slowPeriod; i < candles.length; i++) {
-    const currentCandle = candles[i];
-    const prevFast = fastEMA[i - 1];
-    const prevSlow = slowEMA[i - 1];
-    const currFast = fastEMA[i];
-    const currSlow = slowEMA[i];
+  for (let i = 0; i < candles.length; i++) {
+    const candle = candles[i];
+    const signal = signals[i];
 
-    if (!prevFast || !prevSlow || !currFast || !currSlow) continue;
-
-    const isBullishCrossover = prevFast <= prevSlow && currFast > currSlow;
-    const isBearishCrossover = prevFast >= prevSlow && currFast < currSlow;
-
-    if (position && isBearishCrossover) {
-      const exitPrice = currentCandle.close;
+    if (position && (signal === 'SELL' || i === candles.length - 1)) {
+      const exitPriceNoSlippage = candle.close;
+      const exitPrice = exitPriceNoSlippage * (1 - slippagePct);
       const rawPnl = (exitPrice - position.entryPrice) * position.quantity;
       const exitFee = exitPrice * position.quantity * feeRate;
       const netPnl = rawPnl - exitFee;
@@ -44,24 +36,27 @@ export function runMACrossoverBacktest(candles, options = {}) {
       capital += position.investedAmount + netPnl;
 
       trades.push({
-        id: `T-${trades.length + 1}`,
+        id: `TR-${trades.length + 1}`,
+        direction: 'LONG',
         entryTime: position.entryTime,
-        entryPrice: position.entryPrice,
-        exitTime: currentCandle.time,
-        exitPrice: exitPrice,
-        quantity: position.quantity,
-        feePaid: position.entryFee + exitFee,
-        pnl: netPnl,
-        returnPct: (netPnl / position.investedAmount) * 100,
+        entryPrice: parseFloat(position.entryPrice.toFixed(4)),
+        exitTime: candle.time,
+        exitPrice: parseFloat(exitPrice.toFixed(4)),
+        quantity: parseFloat(position.quantity.toFixed(6)),
+        feePaid: parseFloat((position.entryFee + exitFee).toFixed(2)),
+        pnl: parseFloat(netPnl.toFixed(2)),
+        returnPct: parseFloat(((netPnl / position.investedAmount) * 100).toFixed(2)),
       });
 
       position = null;
     }
 
-    if (!position && isBullishCrossover) {
-      const entryPrice = currentCandle.close;
+    if (!position && signal === 'BUY' && i < candles.length - 1) {
+      const entryPriceNoSlippage = candle.close;
+      const entryPrice = entryPriceNoSlippage * (1 + slippagePct);
+
       const riskAmount = capital * riskPerTrade;
-      const investedAmount = Math.min(capital, riskAmount * 10);
+      const investedAmount = Math.min(capital, Math.max(riskAmount * 10, capital * 0.1));
       const entryFee = investedAmount * feeRate;
       const netInvested = investedAmount - entryFee;
       const quantity = netInvested / entryPrice;
@@ -69,20 +64,20 @@ export function runMACrossoverBacktest(candles, options = {}) {
       capital -= investedAmount;
 
       position = {
-        entryTime: currentCandle.time,
-        entryPrice: entryPrice,
-        quantity: quantity,
-        investedAmount: investedAmount,
-        entryFee: entryFee,
+        entryTime: candle.time,
+        entryPrice,
+        quantity,
+        investedAmount,
+        entryFee,
       };
     }
 
     const currentUnrealizedEquity = position
-      ? capital + position.quantity * currentCandle.close
+      ? capital + position.quantity * candle.close
       : capital;
 
     equityCurve.push({
-      time: currentCandle.time,
+      time: candle.time,
       equity: parseFloat(currentUnrealizedEquity.toFixed(2)),
     });
 
@@ -95,28 +90,6 @@ export function runMACrossoverBacktest(candles, options = {}) {
     }
   }
 
-  if (position) {
-    const lastCandle = candles[candles.length - 1];
-    const exitPrice = lastCandle.close;
-    const rawPnl = (exitPrice - position.entryPrice) * position.quantity;
-    const exitFee = exitPrice * position.quantity * feeRate;
-    const netPnl = rawPnl - exitFee;
-
-    capital += position.investedAmount + netPnl;
-
-    trades.push({
-      id: `T-${trades.length + 1}`,
-      entryTime: position.entryTime,
-      entryPrice: position.entryPrice,
-      exitTime: lastCandle.time,
-      exitPrice: exitPrice,
-      quantity: position.quantity,
-      feePaid: position.entryFee + exitFee,
-      pnl: netPnl,
-      returnPct: (netPnl / position.investedAmount) * 100,
-    });
-  }
-
   const winningTrades = trades.filter((t) => t.pnl > 0);
   const losingTrades = trades.filter((t) => t.pnl < 0);
 
@@ -124,10 +97,17 @@ export function runMACrossoverBacktest(candles, options = {}) {
   const totalGrossLoss = Math.abs(losingTrades.reduce((sum, t) => sum + t.pnl, 0));
 
   const winRate = trades.length > 0 ? (winningTrades.length / trades.length) * 100 : 0;
-  const profitFactor = totalGrossLoss > 0 ? totalGrossProfit / totalGrossLoss : totalGrossProfit > 0 ? 99 : 0;
+  const profitFactor =
+    totalGrossLoss > 0
+      ? totalGrossProfit / totalGrossLoss
+      : totalGrossProfit > 0
+      ? 99
+      : 0;
+
   const totalReturnPct = ((capital - initialCapital) / initialCapital) * 100;
 
   return {
+    strategyCode,
     initialCapital,
     finalCapital: parseFloat(capital.toFixed(2)),
     totalReturnPct: parseFloat(totalReturnPct.toFixed(2)),
