@@ -2,17 +2,23 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Bell, Play, Search, User, Loader2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Bell, Play, Search, User, LogOut, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import Button from '@/components/ui/Button';
 
 export default function Navbar() {
+  const router = useRouter();
   const [ticker, setTicker] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);
 
   useEffect(() => {
     async function fetchLiveBtcPrice() {
       try {
-        const res = await fetch('https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT');
+        const res = await fetch(
+          'https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT'
+        );
         if (res.ok) {
           const data = await res.json();
           setTicker({
@@ -27,10 +33,34 @@ export default function Navbar() {
       }
     }
 
+    async function fetchCurrentUser() {
+      try {
+        const res = await fetch('/api/auth/me');
+        if (res.ok) {
+          const data = await res.json();
+          setUser(data.user);
+        }
+      } catch (err) {
+        setUser(null);
+      }
+    }
+
     fetchLiveBtcPrice();
+    fetchCurrentUser();
     const interval = setInterval(fetchLiveBtcPrice, 10000);
     return () => clearInterval(interval);
   }, []);
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      toast.success('Logged out successfully');
+      router.push('/login');
+      router.refresh();
+    } catch (err) {
+      toast.error('Logout failed');
+    }
+  };
 
   const isPositive = ticker ? ticker.change >= 0 : true;
 
@@ -52,15 +82,26 @@ export default function Navbar() {
             <Loader2 className="w-3.5 h-3.5 animate-spin text-accent-gold" />
           ) : ticker ? (
             <>
-              <span className={`font-semibold ${isPositive ? 'text-profit' : 'text-loss'}`}>
-                ${ticker.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              <span
+                className={`font-semibold ${
+                  isPositive ? 'text-profit' : 'text-loss'
+                }`}
+              >
+                $
+                {ticker.price.toLocaleString('en-US', {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
               </span>
               <span
                 className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
-                  isPositive ? 'text-profit bg-profit/10' : 'text-loss bg-loss/10'
+                  isPositive
+                    ? 'text-profit bg-profit/10'
+                    : 'text-loss bg-loss/10'
                 }`}
               >
-                {isPositive ? '+' : ''}{ticker.change.toFixed(2)}%
+                {isPositive ? '+' : ''}
+                {ticker.change.toFixed(2)}%
               </span>
             </>
           ) : (
@@ -89,9 +130,22 @@ export default function Navbar() {
             <User className="w-4 h-4 text-accent-gold" />
           </div>
           <div className="hidden lg:flex flex-col text-left">
-            <span className="text-xs font-semibold text-text-primary">Quant Trader</span>
-            <span className="text-[10px] text-text-muted font-mono">Pro Account</span>
+            <span className="text-xs font-semibold text-text-primary">
+              {user?.name || user?.email?.split('@')[0] || 'Quant Trader'}
+            </span>
+            <span className="text-[10px] text-text-muted font-mono">
+              {user ? user.email : 'Pro Account'}
+            </span>
           </div>
+
+          <button
+            type="button"
+            onClick={handleLogout}
+            title="Sign Out"
+            className="p-2 text-text-muted hover:text-loss transition-colors cursor-pointer"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
         </div>
       </div>
     </header>
