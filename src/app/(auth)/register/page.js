@@ -77,7 +77,7 @@ export default function RegisterPage() {
           <Input
             label="Full Name"
             type="text"
-            placeholder="Alex Trader"
+            placeholder="Enter your name"
             icon={User}
             value={formData.name}
             onChange={(e) =>
@@ -88,7 +88,7 @@ export default function RegisterPage() {
           <Input
             label="Email Address"
             type="email"
-            placeholder="trader@example.com"
+            placeholder="Enter your email"
             icon={Mail}
             required
             value={formData.email}
