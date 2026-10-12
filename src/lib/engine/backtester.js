@@ -1,138 +1,232 @@
 import { getStrategySignals } from './strategies';
+import { calculateAnalytics } from './analytics';
 
-export function runBacktest(strategyCode, candles, options = {}) {
-  const startTimeMs = performance.now();
+export function runBacktest(candles = [], config = {}) {
+  const startTime = Date.now();
 
   const {
+    strategyCode = 'ma_crossover',
     initialCapital = 10000,
-    riskPerTrade = 0.01,
-    feeRate = 0.001,
-    slippagePct = 0.0005,
-    parameters = {},
-  } = options;
+    riskPerTrade = 1.0,
+    stopLossPct = 1.5,
+    takeProfitPct = 3.0,
+    useStopLoss = true,
+    useTakeProfit = true,
+    feeRate = 0.1,
+    slippagePct = 0.05,
+    parameters = {}
+  } = config;
 
-  if (!candles || candles.length < 20) {
-    return null;
+  if (!candles || !Array.isArray(candles) || candles.length === 0) {
+    return {
+      strategyCode,
+      initialCapital,
+      finalCapital: initialCapital,
+      totalReturnPct: 0,
+      totalTrades: 0,
+      winningTrades: 0,
+      losingTrades: 0,
+      winRate: 0,
+      profitFactor: 0,
+      maxDrawdownPct: 0,
+      executionTimeMs: Date.now() - startTime,
+      slExits: 0,
+      tpExits: 0,
+      signalExits: 0,
+      trades: [],
+      equityCurve: []
+    };
   }
 
-  const signals = getStrategySignals(strategyCode, candles, parameters);
+  const { signals } = getStrategySignals(candles, strategyCode, parameters);
 
-  let capital = initialCapital;
-  let position = null;
+  let currentCapital = initialCapital;
+  let currentPosition = null;
   const trades = [];
   const equityCurve = [];
-  let peakCapital = initialCapital;
-  let maxDrawdownPct = 0;
+
+  let slExits = 0;
+  let tpExits = 0;
+  let signalExits = 0;
+
+  equityCurve.push({
+    time: candles[0].time,
+    equity: initialCapital
+  });
 
   for (let i = 0; i < candles.length; i++) {
     const candle = candles[i];
-    const signal = signals[i];
+    const signal = signals[i] ? signals[i].signal : 'HOLD';
 
-    if (position && (signal === 'SELL' || i === candles.length - 1)) {
-      const exitPriceNoSlippage = candle.close;
-      const exitPrice = exitPriceNoSlippage * (1 - slippagePct);
-      const rawPnl = (exitPrice - position.entryPrice) * position.quantity;
-      const exitFee = exitPrice * position.quantity * feeRate;
-      const netPnl = rawPnl - exitFee;
+    if (currentPosition) {
+      const entryPrice = currentPosition.entryPrice;
+      let exitReason = null;
+      let exitPrice = candle.close;
 
-      capital += position.investedAmount + netPnl;
+      if (currentPosition.direction === 'BUY') {
+        const currentReturnPct = ((candle.high - entryPrice) / entryPrice) * 100;
+        const currentLossPct = ((entryPrice - candle.low) / entryPrice) * 100;
 
-      trades.push({
-        id: `TR-${trades.length + 1}`,
-        direction: 'LONG',
-        entryTime: position.entryTime,
-        entryPrice: parseFloat(position.entryPrice.toFixed(4)),
-        exitTime: candle.time,
-        exitPrice: parseFloat(exitPrice.toFixed(4)),
-        quantity: parseFloat(position.quantity.toFixed(6)),
-        feePaid: parseFloat((position.entryFee + exitFee).toFixed(2)),
-        pnl: parseFloat(netPnl.toFixed(2)),
-        returnPct: parseFloat(((netPnl / position.investedAmount) * 100).toFixed(2)),
-      });
+        if (useTakeProfit && takeProfitPct > 0 && currentReturnPct >= takeProfitPct) {
+          exitReason = 'TAKE_PROFIT';
+          exitPrice = entryPrice * (1 + takeProfitPct / 100);
+          tpExits++;
+        } else if (useStopLoss && stopLossPct > 0 && currentLossPct >= stopLossPct) {
+          exitReason = 'STOP_LOSS';
+          exitPrice = entryPrice * (1 - stopLossPct / 100);
+          slExits++;
+        } else if (signal === 'SELL') {
+          exitReason = 'SIGNAL';
+          exitPrice = candle.close;
+          signalExits++;
+        }
+      } else if (currentPosition.direction === 'SELL') {
+        const currentReturnPct = ((entryPrice - candle.low) / entryPrice) * 100;
+        const currentLossPct = ((candle.high - entryPrice) / entryPrice) * 100;
 
-      position = null;
+        if (useTakeProfit && takeProfitPct > 0 && currentReturnPct >= takeProfitPct) {
+          exitReason = 'TAKE_PROFIT';
+          exitPrice = entryPrice * (1 - takeProfitPct / 100);
+          tpExits++;
+        } else if (useStopLoss && stopLossPct > 0 && currentLossPct >= stopLossPct) {
+          exitReason = 'STOP_LOSS';
+          exitPrice = entryPrice * (1 + stopLossPct / 100);
+          slExits++;
+        } else if (signal === 'BUY') {
+          exitReason = 'SIGNAL';
+          exitPrice = candle.close;
+          signalExits++;
+        }
+      }
+
+      if (i === candles.length - 1 && !exitReason) {
+        exitReason = 'END_OF_DATA';
+        exitPrice = candle.close;
+      }
+
+      if (exitReason) {
+        let grossPnl = 0;
+        if (currentPosition.direction === 'BUY') {
+          grossPnl = (exitPrice - entryPrice) * currentPosition.quantity;
+        } else {
+          grossPnl = (entryPrice - exitPrice) * currentPosition.quantity;
+        }
+
+        const exitValue = exitPrice * currentPosition.quantity;
+        const exitFee = exitValue * (feeRate / 100);
+        const exitSlippageCost = exitValue * (slippagePct / 100);
+
+        const netPnl = grossPnl - exitFee - exitSlippageCost;
+        const totalFeePaid = currentPosition.entryFee + exitFee + currentPosition.entrySlippageCost;
+
+        currentCapital += currentPosition.capitalAllocated + netPnl;
+        const returnPct = (netPnl / currentPosition.capitalAllocated) * 100;
+
+        trades.push({
+          id: trades.length + 1,
+          direction: currentPosition.direction,
+          entryTime: currentPosition.entryTime,
+          entryPrice: currentPosition.entryPrice,
+          exitTime: candle.time,
+          exitPrice,
+          quantity: currentPosition.quantity,
+          feePaid: totalFeePaid,
+          pnl: netPnl,
+          returnPct,
+          exitReason,
+          stopLoss: currentPosition.stopLoss,
+          takeProfit: currentPosition.takeProfit,
+          riskAmount: currentPosition.riskAmount,
+          riskReward: takeProfitPct > 0 && stopLossPct > 0 ? (takeProfitPct / stopLossPct).toFixed(1) : '1.5'
+        });
+
+        currentPosition = null;
+      }
     }
 
-    if (!position && signal === 'BUY' && i < candles.length - 1) {
-      const entryPriceNoSlippage = candle.close;
-      const entryPrice = entryPriceNoSlippage * (1 + slippagePct);
+    if (!currentPosition && (signal === 'BUY' || signal === 'SELL') && i < candles.length - 1) {
+      const entryPrice = candle.close;
+      const riskAmount = currentCapital * (riskPerTrade / 100);
 
-      const riskAmount = capital * riskPerTrade;
-      const investedAmount = Math.min(capital, Math.max(riskAmount * 10, capital * 0.1));
-      const entryFee = investedAmount * feeRate;
-      const netInvested = investedAmount - entryFee;
-      const quantity = netInvested / entryPrice;
+      const positionSizeByRisk = stopLossPct > 0
+        ? (riskAmount / (stopLossPct / 100))
+        : (currentCapital * 0.5);
 
-      capital -= investedAmount;
+      const capitalToAllocate = Math.min(currentCapital * 0.95, Math.max(positionSizeByRisk, currentCapital * 0.3));
+      const rawQuantity = capitalToAllocate / entryPrice;
 
-      position = {
+      const entryValue = entryPrice * rawQuantity;
+      const entryFee = entryValue * (feeRate / 100);
+      const entrySlippageCost = entryValue * (slippagePct / 100);
+
+      const stopLossPrice = signal === 'BUY'
+        ? entryPrice * (1 - stopLossPct / 100)
+        : entryPrice * (1 + stopLossPct / 100);
+
+      const takeProfitPrice = signal === 'BUY'
+        ? entryPrice * (1 + takeProfitPct / 100)
+        : entryPrice * (1 - takeProfitPct / 100);
+
+      currentCapital -= (capitalToAllocate + entryFee + entrySlippageCost);
+
+      currentPosition = {
+        direction: signal,
         entryTime: candle.time,
         entryPrice,
-        quantity,
-        investedAmount,
+        quantity: rawQuantity,
+        capitalAllocated: capitalToAllocate,
         entryFee,
+        entrySlippageCost,
+        stopLoss: stopLossPrice,
+        takeProfit: takeProfitPrice,
+        riskAmount
       };
     }
 
-    const currentUnrealizedEquity = position
-      ? capital + position.quantity * candle.close
-      : capital;
+    const unclosedValue = currentPosition ? (candle.close * currentPosition.quantity) : 0;
+    const currentEquity = currentPosition
+      ? currentCapital + unclosedValue
+      : currentCapital;
 
     equityCurve.push({
       time: candle.time,
-      equity: parseFloat(currentUnrealizedEquity.toFixed(2)),
+      equity: currentEquity
     });
-
-    if (currentUnrealizedEquity > peakCapital) {
-      peakCapital = currentUnrealizedEquity;
-    }
-    const currentDrawdownPct = ((peakCapital - currentUnrealizedEquity) / peakCapital) * 100;
-    if (currentDrawdownPct > maxDrawdownPct) {
-      maxDrawdownPct = currentDrawdownPct;
-    }
   }
 
-  const winningTrades = trades.filter((t) => t.pnl > 0);
-  const losingTrades = trades.filter((t) => t.pnl < 0);
-
-  const totalGrossProfit = winningTrades.reduce((sum, t) => sum + t.pnl, 0);
-  const totalGrossLoss = Math.abs(losingTrades.reduce((sum, t) => sum + t.pnl, 0));
-
-  const winRate = trades.length > 0 ? (winningTrades.length / trades.length) * 100 : 0;
-  const profitFactor =
-    totalGrossLoss > 0
-      ? totalGrossProfit / totalGrossLoss
-      : totalGrossProfit > 0
-      ? 99
-      : 0;
-
-  const totalReturnPct = ((capital - initialCapital) / initialCapital) * 100;
-
-  const endTimeMs = performance.now();
-  const executionTimeMs = parseFloat((endTimeMs - startTimeMs).toFixed(2));
-
-  const startTimestamp = candles[0].time;
-  const endTimestamp = candles[candles.length - 1].time;
-  const durationDays = parseFloat(
-    ((endTimestamp - startTimestamp) / (60 * 60 * 24)).toFixed(1)
-  );
+  const analytics = calculateAnalytics(trades, initialCapital, currentCapital, equityCurve);
+  const executionTimeMs = Date.now() - startTime;
 
   return {
     strategyCode,
     initialCapital,
-    finalCapital: parseFloat(capital.toFixed(2)),
-    totalReturnPct: parseFloat(totalReturnPct.toFixed(2)),
-    totalTrades: trades.length,
-    winningTrades: winningTrades.length,
-    losingTrades: losingTrades.length,
-    winRate: parseFloat(winRate.toFixed(1)),
-    profitFactor: parseFloat(profitFactor.toFixed(2)),
-    maxDrawdownPct: parseFloat(maxDrawdownPct.toFixed(1)),
+    finalCapital: analytics.finalCapital,
+    totalReturnPct: analytics.totalReturnPct,
+    totalTrades: analytics.totalTrades,
+    winningTrades: analytics.winningTrades,
+    losingTrades: analytics.losingTrades,
+    winRate: analytics.winRate,
+    profitFactor: analytics.profitFactor,
+    maxDrawdownPct: analytics.maxDrawdownPct,
     executionTimeMs,
-    startTimestamp,
-    endTimestamp,
-    durationDays,
+    startTimestamp: candles[0] ? candles[0].time : 0,
+    endTimestamp: candles[candles.length - 1] ? candles[candles.length - 1].time : 0,
+    durationDays: candles.length > 0 ? Math.round((candles[candles.length - 1].time - candles[0].time) / 86400) : 0,
+    slExits,
+    tpExits,
+    signalExits,
+    riskConfig: {
+      riskPerTrade,
+      stopLossPct,
+      takeProfitPct,
+      feeRate,
+      slippagePct,
+      useStopLoss,
+      useTakeProfit
+    },
     trades,
-    equityCurve,
+    equityCurve
   };
 }
+
+export const runBacktestEngine = runBacktest;

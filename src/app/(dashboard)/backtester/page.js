@@ -6,15 +6,7 @@ import BacktestForm from '@/components/backtest/BacktestForm';
 import TradingViewChart from '@/components/charts/TradingViewChart';
 import EquityChart from '@/components/charts/EquityChart';
 import TradeTable from '@/components/backtest/TradeTable';
-import {
-  TrendingUp,
-  Percent,
-  Activity,
-  ArrowDownRight,
-  Loader2,
-  Clock,
-  Calendar,
-  Zap,
+import { TrendingUp, Percent, Activity, ArrowDownRight, Loader2, Clock, Calendar, Zap, Shield, Target,
 } from 'lucide-react';
 
 export default function BacktesterPage() {
@@ -24,6 +16,12 @@ export default function BacktesterPage() {
     timeframe: '1h',
     initialCapital: 10000,
     riskPerTrade: 1.0,
+    useStopLoss: true,
+    stopLossPct: 1.5,
+    useTakeProfit: true,
+    takeProfitPct: 3.0,
+    feeRate: 0.1,
+    slippagePct: 0.05,
     parameters: {
       fastPeriod: 20,
       slowPeriod: 50,
@@ -47,6 +45,12 @@ export default function BacktesterPage() {
           timeframe: targetConfig.timeframe,
           initialCapital: Number(targetConfig.initialCapital),
           riskPerTrade: Number(targetConfig.riskPerTrade) / 100,
+          feeRate: Number(targetConfig.feeRate || 0.1) / 100,
+          slippagePct: Number(targetConfig.slippagePct || 0.05) / 100,
+          stopLossPct: Number(targetConfig.stopLossPct || 0),
+          takeProfitPct: Number(targetConfig.takeProfitPct || 0),
+          useStopLoss: Boolean(targetConfig.useStopLoss),
+          useTakeProfit: Boolean(targetConfig.useTakeProfit),
           parameters: targetConfig.parameters,
         }),
       });
@@ -88,6 +92,12 @@ export default function BacktesterPage() {
             timeframe: '1h',
             initialCapital: 10000,
             riskPerTrade: 0.01,
+            feeRate: 0.001,
+            slippagePct: 0.0005,
+            stopLossPct: 1.5,
+            takeProfitPct: 3.0,
+            useStopLoss: true,
+            useTakeProfit: true,
             parameters: { fastPeriod: 20, slowPeriod: 50 },
           }),
         });
@@ -258,6 +268,59 @@ export default function BacktesterPage() {
                 </div>
               </div>
             </div>
+
+            {/* Risk Exit Breakdown */}
+            {(backtestResult.slExits > 0 || backtestResult.tpExits > 0 || backtestResult.signalExits > 0) && (
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-bg-card border border-border-primary rounded-xl p-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-md bg-loss/10 border border-loss/20">
+                      <Shield className="w-3.5 h-3.5 text-loss" />
+                    </div>
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">
+                        Stop-Loss Exits
+                      </div>
+                      <div className="text-sm font-mono font-bold text-text-primary">
+                        {backtestResult.slExits}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-bg-card border border-border-primary rounded-xl p-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-md bg-profit/10 border border-profit/20">
+                      <Target className="w-3.5 h-3.5 text-profit" />
+                    </div>
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">
+                        Take-Profit Exits
+                      </div>
+                      <div className="text-sm font-mono font-bold text-text-primary">
+                        {backtestResult.tpExits}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-bg-card border border-border-primary rounded-xl p-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-md bg-accent-gold/10 border border-accent-gold/20">
+                      <Activity className="w-3.5 h-3.5 text-accent-gold" />
+                    </div>
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">
+                        Signal Exits
+                      </div>
+                      <div className="text-sm font-mono font-bold text-text-primary">
+                        {backtestResult.signalExits}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </>
         )}
 
@@ -279,6 +342,7 @@ export default function BacktesterPage() {
           </div>
         )}
 
+        {/* Equity Curve + Trade Log Split */}
         {!loading && backtestResult && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
             <div className="lg:col-span-5 space-y-1.5">

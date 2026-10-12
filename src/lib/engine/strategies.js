@@ -1,127 +1,193 @@
-import { calculateEMA } from '@/lib/indicators/ema';
-import { calculateRSI } from '@/lib/indicators/rsi';
-import { calculateMACD } from '@/lib/indicators/macd';
-import { calculateBollingerBands } from '@/lib/indicators/bollinger';
-import { calculateStochastic } from '@/lib/indicators/stochastic';
-import { calculateSupertrend } from '@/lib/indicators/supertrend';
-import { calculateCCI } from '@/lib/indicators/cci';
-
-export function getStrategySignals(strategyCode, candles, params = {}) {
-  const signals = new Array(candles.length).fill(null);
-
-  if (strategyCode === 'ma_crossover') {
-    const fastPeriod = params.fastPeriod || 20;
-    const slowPeriod = params.slowPeriod || 50;
-    const fastEMA = calculateEMA(candles, fastPeriod);
-    const slowEMA = calculateEMA(candles, slowPeriod);
-
-    for (let i = slowPeriod; i < candles.length; i++) {
-      const prevFast = fastEMA[i - 1];
-      const prevSlow = slowEMA[i - 1];
-      const currFast = fastEMA[i];
-      const currSlow = slowEMA[i];
-
-      if (prevFast <= prevSlow && currFast > currSlow) signals[i] = 'BUY';
-      else if (prevFast >= prevSlow && currFast < currSlow) signals[i] = 'SELL';
+function calculateSMA(prices, period) {
+  const sma = [];
+  for (let i = 0; i < prices.length; i++) {
+    if (i < period - 1) {
+      sma.push(null);
+    } else {
+      let sum = 0;
+      for (let j = 0; j < period; j++) {
+        sum += prices[i - j];
+      }
+      sma.push(sum / period);
     }
   }
+  return sma;
+}
 
-  else if (strategyCode === 'rsi') {
-    const period = params.period || 14;
-    const oversold = params.oversold || 30;
-    const overbought = params.overbought || 70;
-    const rsi = calculateRSI(candles, period);
-
-    for (let i = period + 1; i < candles.length; i++) {
-      if (rsi[i - 1] <= oversold && rsi[i] > oversold) signals[i] = 'BUY';
-      else if (rsi[i - 1] >= overbought && rsi[i] < overbought) signals[i] = 'SELL';
+function calculateEMA(prices, period) {
+  const ema = [];
+  if (!prices || prices.length === 0) return ema;
+  const k = 2 / (period + 1);
+  let prevEma = prices[0];
+  for (let i = 0; i < prices.length; i++) {
+    if (i === 0) {
+      ema.push(prevEma);
+    } else {
+      const val = prices[i] * k + prevEma * (1 - k);
+      ema.push(val);
+      prevEma = val;
     }
   }
+  return ema;
+}
 
-  else if (strategyCode === 'macd') {
-    const fastPeriod = params.fastPeriod || 12;
-    const slowPeriod = params.slowPeriod || 26;
-    const signalPeriod = params.signalPeriod || 9;
-    const { macdLine, signalLine } = calculateMACD(candles, fastPeriod, slowPeriod, signalPeriod);
+function calculateRSI(prices, period = 14) {
+  const rsi = [];
+  if (!prices || prices.length < period) return prices.map(() => 50);
 
-    for (let i = slowPeriod + signalPeriod; i < candles.length; i++) {
-      if (macdLine[i - 1] <= signalLine[i - 1] && macdLine[i] > signalLine[i]) signals[i] = 'BUY';
-      else if (macdLine[i - 1] >= signalLine[i - 1] && macdLine[i] < signalLine[i]) signals[i] = 'SELL';
-    }
+  let gains = 0;
+  let losses = 0;
+
+  for (let i = 1; i <= period; i++) {
+    const diff = prices[i] - prices[i - 1];
+    if (diff >= 0) gains += diff;
+    else losses += Math.abs(diff);
   }
 
-  else if (strategyCode === 'bollinger') {
-    const period = params.period || 20;
-    const stdDev = params.stdDev || 2.0;
-    const { upperBand, lowerBand } = calculateBollingerBands(candles, period, stdDev);
+  let avgGain = gains / period;
+  let avgLoss = losses / period;
 
-    for (let i = period; i < candles.length; i++) {
-      if (candles[i - 1].close <= lowerBand[i - 1] && candles[i].close > lowerBand[i]) {
-        signals[i] = 'BUY';
-      } else if (candles[i - 1].close >= upperBand[i - 1] && candles[i].close < upperBand[i]) {
-        signals[i] = 'SELL';
+  for (let i = 0; i < prices.length; i++) {
+    if (i < period) {
+      rsi.push(50);
+    } else if (i === period) {
+      const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
+      rsi.push(100 - 100 / (1 + rs));
+    } else {
+      const diff = prices[i] - prices[i - 1];
+      const gain = diff >= 0 ? diff : 0;
+      const loss = diff < 0 ? Math.abs(diff) : 0;
+
+      avgGain = (avgGain * (period - 1) + gain) / period;
+      avgLoss = (avgLoss * (period - 1) + loss) / period;
+
+      const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
+      rsi.push(100 - 100 / (1 + rs));
+    }
+  }
+  return rsi;
+}
+
+function calculateMACD(prices, fastPeriod = 12, slowPeriod = 26, signalPeriod = 9) {
+  const fastEma = calculateEMA(prices, fastPeriod);
+  const slowEma = calculateEMA(prices, slowPeriod);
+  const macdLine = prices.map((_, i) => fastEma[i] - slowEma[i]);
+  const signalLine = calculateEMA(macdLine, signalPeriod);
+  return { macdLine, signalLine };
+}
+
+function calculateBollingerBands(prices, period = 20, stdDevMult = 2.0) {
+  const sma = calculateSMA(prices, period);
+  const upper = [];
+  const lower = [];
+
+  for (let i = 0; i < prices.length; i++) {
+    if (i < period - 1) {
+      upper.push(prices[i]);
+      lower.push(prices[i]);
+    } else {
+      let sumSq = 0;
+      const mean = sma[i] || prices[i];
+      for (let j = 0; j < period; j++) {
+        sumSq += Math.pow(prices[i - j] - mean, 2);
+      }
+      const stdDev = Math.sqrt(sumSq / period);
+      upper.push(mean + stdDevMult * stdDev);
+      lower.push(mean - stdDevMult * stdDev);
+    }
+  }
+  return { upper, lower, middle: sma };
+}
+
+export function getStrategySignals(candles = [], strategyCode = 'ma_crossover', params = {}) {
+  if (!candles || !Array.isArray(candles) || candles.length === 0) {
+    return { signals: [] };
+  }
+
+  const closes = candles.map((c) => c.close || 0);
+  const signals = candles.map((c) => ({ time: c.time, signal: 'HOLD' }));
+
+  const code = (strategyCode || 'ma_crossover').toLowerCase();
+
+  try {
+    if (code === 'ma_crossover' || code === 'ema_crossover') {
+      const fastPeriod = parseInt(params.fastPeriod || 20, 10);
+      const slowPeriod = parseInt(params.slowPeriod || 50, 10);
+      const fastEma = calculateEMA(closes, fastPeriod);
+      const slowEma = calculateEMA(closes, slowPeriod);
+
+      for (let i = slowPeriod; i < candles.length; i++) {
+        const prevFast = fastEma[i - 1];
+        const prevSlow = slowEma[i - 1];
+        const currFast = fastEma[i];
+        const currSlow = slowEma[i];
+
+        if (prevFast <= prevSlow && currFast > currSlow) {
+          signals[i].signal = 'BUY';
+        } else if (prevFast >= prevSlow && currFast < currSlow) {
+          signals[i].signal = 'SELL';
+        }
+      }
+    } else if (code === 'rsi') {
+      const period = parseInt(params.period || 14, 10);
+      const oversold = parseFloat(params.oversold || 30);
+      const overbought = parseFloat(params.overbought || 70);
+      const rsiValues = calculateRSI(closes, period);
+
+      for (let i = period + 1; i < candles.length; i++) {
+        const prevRsi = rsiValues[i - 1];
+        const currRsi = rsiValues[i];
+
+        if (prevRsi <= oversold && currRsi > oversold) {
+          signals[i].signal = 'BUY';
+        } else if (prevRsi >= overbought && currRsi < overbought) {
+          signals[i].signal = 'SELL';
+        }
+      }
+    } else if (code === 'macd') {
+      const fastPeriod = parseInt(params.fastPeriod || 12, 10);
+      const slowPeriod = parseInt(params.slowPeriod || 26, 10);
+      const signalPeriod = parseInt(params.signalPeriod || 9, 10);
+      const { macdLine, signalLine } = calculateMACD(closes, fastPeriod, slowPeriod, signalPeriod);
+
+      for (let i = slowPeriod + signalPeriod; i < candles.length; i++) {
+        const prevMacd = macdLine[i - 1];
+        const prevSignal = signalLine[i - 1];
+        const currMacd = macdLine[i];
+        const currSignal = signalLine[i];
+
+        if (prevMacd <= prevSignal && currMacd > currSignal) {
+          signals[i].signal = 'BUY';
+        } else if (prevMacd >= prevSignal && currMacd < currSignal) {
+          signals[i].signal = 'SELL';
+        }
+      }
+    } else if (code === 'bollinger') {
+      const period = parseInt(params.period || 20, 10);
+      const stdDev = parseFloat(params.stdDev || 2.0);
+      const { upper, lower } = calculateBollingerBands(closes, period, stdDev);
+
+      for (let i = period; i < candles.length; i++) {
+        if (closes[i] <= lower[i] && closes[i - 1] > lower[i - 1]) {
+          signals[i].signal = 'BUY';
+        } else if (closes[i] >= upper[i] && closes[i - 1] < upper[i - 1]) {
+          signals[i].signal = 'SELL';
+        }
+      }
+    } else {
+      const fastEma = calculateEMA(closes, 20);
+      const slowEma = calculateEMA(closes, 50);
+
+      for (let i = 50; i < candles.length; i++) {
+        if (fastEma[i - 1] <= slowEma[i - 1] && fastEma[i] > slowEma[i]) {
+          signals[i].signal = 'BUY';
+        } else if (fastEma[i - 1] >= slowEma[i - 1] && fastEma[i] < slowEma[i]) {
+          signals[i].signal = 'SELL';
+        }
       }
     }
+  } catch (err) {
   }
 
-  else if (strategyCode === 'stochastic') {
-    const kPeriod = params.kPeriod || 14;
-    const dPeriod = params.dPeriod || 3;
-    const oversold = params.oversold || 20;
-    const overbought = params.overbought || 80;
-    const { k, d } = calculateStochastic(candles, kPeriod, dPeriod);
-
-    for (let i = kPeriod + dPeriod; i < candles.length; i++) {
-      if (k[i - 1] <= d[i - 1] && k[i] > d[i] && k[i] < oversold + 10) {
-        signals[i] = 'BUY';
-      } else if (k[i - 1] >= d[i - 1] && k[i] < d[i] && k[i] > overbought - 10) {
-        signals[i] = 'SELL';
-      }
-    }
-  }
-
-  else if (strategyCode === 'supertrend') {
-    const period = params.period || 10;
-    const multiplier = params.multiplier || 3;
-    const { direction } = calculateSupertrend(candles, period, multiplier);
-
-    for (let i = period + 1; i < candles.length; i++) {
-      if (direction[i - 1] === -1 && direction[i] === 1) signals[i] = 'BUY';
-      else if (direction[i - 1] === 1 && direction[i] === -1) signals[i] = 'SELL';
-    }
-  }
-
-  else if (strategyCode === 'cci') {
-    const period = params.period || 20;
-    const oversold = params.oversold || -100;
-    const overbought = params.overbought || 100;
-    const cci = calculateCCI(candles, period);
-
-    for (let i = period + 1; i < candles.length; i++) {
-      if (cci[i - 1] <= oversold && cci[i] > oversold) signals[i] = 'BUY';
-      else if (cci[i - 1] >= overbought && cci[i] < overbought) signals[i] = 'SELL';
-    }
-  }
-
-  else if (strategyCode === 'ema_rsi_combo') {
-    const fastPeriod = params.fastPeriod || 20;
-    const slowPeriod = params.slowPeriod || 50;
-    const rsiPeriod = params.rsiPeriod || 14;
-    const rsiOversold = params.rsiOversold || 40;
-    const rsiOverbought = params.rsiOverbought || 60;
-
-    const fastEMA = calculateEMA(candles, fastPeriod);
-    const slowEMA = calculateEMA(candles, slowPeriod);
-    const rsi = calculateRSI(candles, rsiPeriod);
-
-    for (let i = Math.max(slowPeriod, rsiPeriod) + 1; i < candles.length; i++) {
-      const bullishCross = fastEMA[i - 1] <= slowEMA[i - 1] && fastEMA[i] > slowEMA[i];
-      const bearishCross = fastEMA[i - 1] >= slowEMA[i - 1] && fastEMA[i] < slowEMA[i];
-
-      if (bullishCross && rsi[i] > rsiOversold) signals[i] = 'BUY';
-      else if (bearishCross && rsi[i] < rsiOverbought) signals[i] = 'SELL';
-    }
-  }
-
-  return signals;
+  return { signals };
 }

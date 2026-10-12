@@ -2,151 +2,146 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Bell, Play, Search, User, LogOut, Loader2 } from 'lucide-react';
-import { toast } from 'sonner';
-import Button from '@/components/ui/Button';
+import { TrendingUp, TrendingDown, User, LogOut, ShieldCheck, Activity } from 'lucide-react';
 
 export default function Navbar() {
   const router = useRouter();
-  const [ticker, setTicker] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
+  const [btcPrice, setBtcPrice] = useState({
+    price: '96,450.00',
+    change: '+1.85',
+    isPositive: true
+  });
 
   useEffect(() => {
-    async function fetchLiveBtcPrice() {
-      try {
-        const res = await fetch(
-          'https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT'
-        );
-        if (res.ok) {
-          const data = await res.json();
-          setTicker({
-            price: parseFloat(data.lastPrice),
-            change: parseFloat(data.priceChangePercent),
-          });
-        }
-      } catch (err) {
-        console.error('Failed to fetch live BTC ticker:', err);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    async function fetchCurrentUser() {
+    async function checkAuth() {
       try {
         const res = await fetch('/api/auth/me');
         if (res.ok) {
           const data = await res.json();
-          setUser(data.user);
+          if (data.authenticated) {
+            setUser(data.user);
+          }
         }
-      } catch (err) {
-        setUser(null);
-      }
+      } catch (err) {}
+    }
+    checkAuth();
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function fetchLiveBtcPrice() {
+      try {
+        const res = await fetch('/api/market-data?ticker=true');
+        if (res.ok && isMounted) {
+          const data = await res.json();
+          if (data.price) {
+            const priceFormatted = Number(data.price).toLocaleString('en-US', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2
+            });
+            const changeVal = Number(data.change24h || 0);
+            const changeFormatted = (changeVal >= 0 ? '+' : '') + changeVal.toFixed(2);
+
+            setBtcPrice({
+              price: priceFormatted,
+              change: changeFormatted,
+              isPositive: changeVal >= 0
+            });
+          }
+        }
+      } catch (err) {}
     }
 
     fetchLiveBtcPrice();
-    fetchCurrentUser();
     const interval = setInterval(fetchLiveBtcPrice, 10000);
-    return () => clearInterval(interval);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, []);
 
-  const handleLogout = async () => {
+  async function handleLogout() {
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
-      toast.success('Logged out successfully');
+      setUser(null);
       router.push('/login');
       router.refresh();
-    } catch (err) {
-      toast.error('Logout failed');
-    }
-  };
-
-  const isPositive = ticker ? ticker.change >= 0 : true;
+    } catch (err) {}
+  }
 
   return (
-    <header className="h-20 border-b border-border-primary bg-bg-card/70 backdrop-blur-md px-6 flex items-center justify-between sticky top-0 z-20">
-      <div className="flex items-center gap-4">
-        <div className="relative hidden md:block w-72">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
-          <input
-            type="text"
-            placeholder="Search strategies, pairs, backtests..."
-            className="w-full rounded-lg bg-bg-tertiary border border-border-primary pl-9 pr-3 py-2 text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent-gold/50 transition-colors"
+    <header className="h-16 border-b border-[#1E2638] bg-[#07090E]/90 backdrop-blur-md sticky top-0 z-40 px-4 md:px-8 flex items-center justify-between">
+      <div className="flex items-center space-x-6">
+        <Link href="/" className="flex items-center">
+          <Image
+            src="/logo.png"
+            alt="DC Funded Trader"
+            width={280}
+            height={70}
+            priority
+            className="h-9 md:h-11 w-auto object-contain"
           />
-        </div>
-
-        <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-bg-tertiary border border-border-primary text-xs font-mono">
-          <span className="text-text-muted">BTC/USD:</span>
-          {loading ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-accent-gold" />
-          ) : ticker ? (
-            <>
-              <span
-                className={`font-semibold ${
-                  isPositive ? 'text-profit' : 'text-loss'
-                }`}
-              >
-                $
-                {ticker.price.toLocaleString('en-US', {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
-              </span>
-              <span
-                className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
-                  isPositive
-                    ? 'text-profit bg-profit/10'
-                    : 'text-loss bg-loss/10'
-                }`}
-              >
-                {isPositive ? '+' : ''}
-                {ticker.change.toFixed(2)}%
-              </span>
-            </>
-          ) : (
-            <span className="text-text-muted">Unavailable</span>
-          )}
-        </div>
+        </Link>
       </div>
 
-      <div className="flex items-center gap-3">
-        <Link href="/backtester">
-          <Button variant="primary" size="sm" icon={Play}>
-            Run Backtest
-          </Button>
-        </Link>
-
-        <button
-          type="button"
-          className="w-9 h-9 rounded-lg bg-bg-tertiary border border-border-primary text-text-secondary hover:text-text-primary flex items-center justify-center transition-colors relative cursor-pointer"
-        >
-          <Bell className="w-4 h-4" />
-          <span className="w-2 h-2 rounded-full bg-accent-gold absolute top-2 right-2" />
-        </button>
-
-        <div className="flex items-center gap-2.5 pl-2 border-l border-border-primary">
-          <div className="w-9 h-9 rounded-lg bg-bg-tertiary border border-border-primary flex items-center justify-center text-text-secondary font-mono text-xs font-bold">
-            <User className="w-4 h-4 text-accent-gold" />
+      <div className="flex items-center space-x-4 md:space-x-6">
+        <div className="hidden sm:flex items-center space-x-3 bg-[#0D111A] border border-[#1E2638] px-3.5 py-1.5 rounded-lg text-xs font-mono">
+          <div className="flex items-center space-x-1.5">
+            <Activity className="w-3.5 h-3.5 text-[#F59E0B] animate-pulse" />
+            <span className="text-[#8B949E] font-medium">BTC/USD</span>
           </div>
-          <div className="hidden lg:flex flex-col text-left">
-            <span className="text-xs font-semibold text-text-primary">
-              {user?.name || user?.email?.split('@')[0] || 'Quant Trader'}
-            </span>
-            <span className="text-[10px] text-text-muted font-mono">
-              {user ? user.email : 'Pro Account'}
-            </span>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleLogout}
-            title="Sign Out"
-            className="p-2 text-text-muted hover:text-loss transition-colors cursor-pointer"
+          <span className="text-[#F0F6FC] font-bold">${btcPrice.price}</span>
+          <span
+            className={`flex items-center font-bold px-1.5 py-0.5 rounded ${
+              btcPrice.isPositive
+                ? 'text-[#10B981] bg-[#10B981]/10'
+                : 'text-[#EF4444] bg-[#EF4444]/10'
+            }`}
           >
-            <LogOut className="w-4 h-4" />
-          </button>
+            {btcPrice.isPositive ? (
+              <TrendingUp className="w-3 h-3 mr-1 inline" />
+            ) : (
+              <TrendingDown className="w-3 h-3 mr-1 inline" />
+            )}
+            {btcPrice.change}%
+          </span>
         </div>
+
+        {user ? (
+          <div className="flex items-center space-x-3">
+            <div className="hidden md:flex flex-col items-end text-xs">
+              <span className="text-[#F0F6FC] font-semibold">{user.name || 'Trader'}</span>
+              <span className="text-[#8B949E] text-[10px] truncate max-w-[140px]">{user.email}</span>
+            </div>
+            <button
+              onClick={handleLogout}
+              title="Sign Out"
+              className="p-2 rounded-lg bg-[#0D111A] border border-[#1E2638] text-[#8B949E] hover:text-[#EF4444] hover:border-[#EF4444]/40 transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center space-x-3 text-xs font-medium">
+            <Link
+              href="/login"
+              className="text-[#8B949E] hover:text-[#F0F6FC] transition-colors px-3 py-1.5"
+            >
+              Sign In
+            </Link>
+            <Link
+              href="/register"
+              className="bg-gradient-to-r from-[#F59E0B] to-[#D97706] text-[#07090E] font-bold px-3.5 py-1.5 rounded-lg shadow-sm hover:brightness-110 transition-all"
+            >
+              Get Started
+            </Link>
+          </div>
+        )}
       </div>
     </header>
   );

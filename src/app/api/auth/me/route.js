@@ -1,23 +1,20 @@
-import { verifyJWT } from '@/lib/auth';
+import { NextResponse } from 'next/server';
+import { jwtVerify } from 'jose';
 import { prisma } from '@/lib/database/prisma';
+
+const JWT_SECRET = new TextEncoder().encode(
+  process.env.JWT_SECRET || 'tradelab_super_secret_jwt_key_2025_prod_secure'
+);
 
 export async function GET(request) {
   try {
-    const cookieHeader = request.headers.get('cookie') || '';
-    const tokenCookie = cookieHeader
-      .split(';')
-      .find((c) => c.trim().startsWith('token='));
+    const token = request.cookies.get('token')?.value;
 
-    if (!tokenCookie) {
-      return Response.json({ user: null }, { status: 401 });
+    if (!token) {
+      return NextResponse.json({ authenticated: false }, { status: 401 });
     }
 
-    const token = tokenCookie.split('=')[1];
-    const payload = await verifyJWT(token);
-
-    if (!payload || !payload.userId) {
-      return Response.json({ user: null }, { status: 401 });
-    }
+    const { payload } = await jwtVerify(token, JWT_SECRET);
 
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },
@@ -25,16 +22,56 @@ export async function GET(request) {
         id: true,
         email: true,
         name: true,
-        createdAt: true,
-      },
+        createdAt: true
+      }
     });
 
     if (!user) {
-      return Response.json({ user: null }, { status: 401 });
+      return NextResponse.json({ authenticated: false }, { status: 401 });
     }
 
-    return Response.json({ user });
+    return NextResponse.json({
+      authenticated: true,
+      user
+    });
   } catch (error) {
-    return Response.json({ user: null }, { status: 401 });
+    return NextResponse.json({ authenticated: false }, { status: 401 });
+  }
+}
+
+export async function PUT(request) {
+  try {
+    const token = request.cookies.get('token')?.value;
+
+    if (!token) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const body = await request.json();
+
+    const updatedUser = await prisma.user.update({
+      where: { id: payload.userId },
+      data: {
+        name: body.name || undefined
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        createdAt: true
+      }
+    });
+
+    return NextResponse.json({
+      success: true,
+      user: updatedUser,
+      message: 'Settings updated successfully'
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
+    );
   }
 }

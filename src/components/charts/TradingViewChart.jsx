@@ -104,7 +104,7 @@ export default function TradingViewChart({ candles = [], trades = [] }) {
     } else if (typeof createSeriesMarkers === 'function') {
       createSeriesMarkers(candlestickSeries, markers);
     }
-
+                    
     chart.timeScale().fitContent();
 
     const handleResize = () => {
@@ -125,7 +125,7 @@ export default function TradingViewChart({ candles = [], trades = [] }) {
 
   return (
     <div className="relative w-full rounded-xl overflow-hidden border border-border-primary bg-bg-card">
-      <div ref={chartContainerRef} className="w-full h-[420px]" />
+      <div ref={chartContainerRef} className="w-full h-105" />
     </div>
   );
 }

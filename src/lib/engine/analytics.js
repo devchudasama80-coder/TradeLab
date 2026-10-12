@@ -1,56 +1,100 @@
-export function calculateAdvancedAnalytics(backtestResult) {
-  if (!backtestResult || !backtestResult.trades || backtestResult.trades.length === 0) {
+export function calculateAnalytics(tradesInput = [], initialCapital = 10000, finalCapital = 10000, equityCurve = []) {
+  const trades = Array.isArray(tradesInput)
+    ? tradesInput
+    : (tradesInput && Array.isArray(tradesInput.trades) ? tradesInput.trades : []);
+
+  const totalTrades = trades.length;
+
+  if (totalTrades === 0) {
     return {
-      sharpeRatio: 0,
-      avgTradePnl: 0,
-      avgWin: 0,
-      avgLoss: 0,
-      winLossRatio: 0,
-      bestTrade: 0,
-      worstTrade: 0,
-      totalFees: 0,
-      expectancy: 0,
+      initialCapital,
+      finalCapital,
+      totalReturnPct: 0,
+      totalTrades: 0,
+      winningTrades: 0,
+      losingTrades: 0,
+      winRate: 0,
+      profitFactor: 0,
+      maxDrawdownPct: 0,
+      averageWin: 0,
+      averageLoss: 0,
+      maxWin: 0,
+      maxLoss: 0,
+      expectancy: 0
     };
   }
 
-  const trades = backtestResult.trades;
-  const wins = trades.filter((t) => t.pnl > 0);
-  const losses = trades.filter((t) => t.pnl < 0);
+  let winningTrades = 0;
+  let losingTrades = 0;
+  let grossProfit = 0;
+  let grossLoss = 0;
+  let maxWin = 0;
+  let maxLoss = 0;
 
-  const totalFees = trades.reduce((sum, t) => sum + (t.feePaid || 0), 0);
-  const sumPnl = trades.reduce((sum, t) => sum + t.pnl, 0);
-  const avgTradePnl = sumPnl / trades.length;
+  trades.forEach((trade) => {
+    if (!trade) return;
+    const pnl = Number(trade.pnl || 0);
+    if (pnl > 0) {
+      winningTrades++;
+      grossProfit += pnl;
+      if (pnl > maxWin) maxWin = pnl;
+    } else if (pnl < 0) {
+      losingTrades++;
+      grossLoss += Math.abs(pnl);
+      if (pnl < maxLoss) maxLoss = pnl;
+    }
+  });
 
-  const totalWinAmount = wins.reduce((sum, t) => sum + t.pnl, 0);
-  const totalLossAmount = Math.abs(losses.reduce((sum, t) => sum + t.pnl, 0));
+  const winRate = parseFloat(((winningTrades / totalTrades) * 100).toFixed(2));
+  const profitFactor = grossLoss > 0
+    ? parseFloat((grossProfit / grossLoss).toFixed(2))
+    : grossProfit > 0 ? 999 : 0;
 
-  const avgWin = wins.length > 0 ? totalWinAmount / wins.length : 0;
-  const avgLoss = losses.length > 0 ? totalLossAmount / losses.length : 0;
-  const winLossRatio = avgLoss > 0 ? avgWin / avgLoss : avgWin > 0 ? 99 : 0;
+  const totalReturnPct = parseFloat((((finalCapital - initialCapital) / initialCapital) * 100).toFixed(2));
 
-  const bestTrade = Math.max(...trades.map((t) => t.pnl));
-  const worstTrade = Math.min(...trades.map((t) => t.pnl));
+  let peak = initialCapital;
+  let maxDrawdown = 0;
 
-  const winRateDecimal = wins.length / trades.length;
-  const lossRateDecimal = 1 - winRateDecimal;
-  const expectancy = winRateDecimal * avgWin - lossRateDecimal * avgLoss;
+  const safeEquityCurve = Array.isArray(equityCurve) ? equityCurve : [];
 
-  const returns = trades.map((t) => t.returnPct);
-  const meanReturn = returns.reduce((a, b) => a + b, 0) / returns.length;
-  const variance =
-    returns.reduce((sum, r) => sum + Math.pow(r - meanReturn, 2), 0) / returns.length;
-  const stdDev = Math.sqrt(variance) || 1;
-  const sharpeRatio = (meanReturn / stdDev) * Math.sqrt(252);
+  safeEquityCurve.forEach((point) => {
+    if (!point || typeof point.equity !== 'number') return;
+    if (point.equity > peak) {
+      peak = point.equity;
+    }
+    const dd = ((peak - point.equity) / peak) * 100;
+    if (dd > maxDrawdown) {
+      maxDrawdown = dd;
+    }
+  });
+
+  const maxDrawdownPct = parseFloat(maxDrawdown.toFixed(2));
+
+  const averageWin = winningTrades > 0 ? parseFloat((grossProfit / winningTrades).toFixed(2)) : 0;
+  const averageLoss = losingTrades > 0 ? parseFloat((grossLoss / losingTrades).toFixed(2)) : 0;
+
+  const expectancy = totalTrades > 0
+    ? parseFloat((((winRate / 100) * averageWin) - ((1 - winRate / 100) * averageLoss)).toFixed(2))
+    : 0;
 
   return {
-    sharpeRatio: parseFloat(sharpeRatio.toFixed(2)),
-    avgTradePnl: parseFloat(avgTradePnl.toFixed(2)),
-    avgWin: parseFloat(avgWin.toFixed(2)),
-    avgLoss: parseFloat(avgLoss.toFixed(2)),
-    winLossRatio: parseFloat(winLossRatio.toFixed(2)),
-    bestTrade: parseFloat(bestTrade.toFixed(2)),
-    worstTrade: parseFloat(worstTrade.toFixed(2)),
-    totalFees: parseFloat(totalFees.toFixed(2)),
-    expectancy: parseFloat(expectancy.toFixed(2)),
+    initialCapital,
+    finalCapital,
+    totalReturnPct,
+    totalTrades,
+    winningTrades,
+    losingTrades,
+    winRate,
+    profitFactor,
+    maxDrawdownPct,
+    averageWin,
+    averageLoss,
+    maxWin,
+    maxLoss,
+    expectancy
   };
+}
+
+export function calculateAdvancedAnalytics(trades, initialCapital, finalCapital, equityCurve) {
+  return calculateAnalytics(trades, initialCapital, finalCapital, equityCurve);
 }

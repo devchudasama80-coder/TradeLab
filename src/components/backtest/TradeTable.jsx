@@ -11,8 +11,8 @@ export default function TradeTable({ trades = [] }) {
 
   return (
     <div className="bg-bg-card border border-border-primary rounded-xl overflow-hidden w-full">
-      <div className="overflow-x-auto max-h-[380px] overflow-y-auto">
-        <table className="w-full text-left text-xs font-mono min-w-[700px]">
+      <div className="overflow-x-auto max-h-95 overflow-y-auto">
+        <table className="w-full text-left text-xs font-mono min-w-175">
           <thead className="bg-bg-tertiary sticky top-0 z-10 text-text-muted uppercase tracking-wider text-[10px]">
             <tr className="border-b border-border-primary">
               <th className="py-2.5 px-4 font-semibold">ID</th>

@@ -44,7 +44,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-bg-primary bg-trading-grid flex items-center justify-center p-6 relative overflow-hidden">
-      <div className="glow-ambient-gold top-[-100px] left-[20%]" />
+      <div className="glow-ambient-gold -top-25 left-[20%]" />
 
       <div className="w-full max-w-md bg-bg-card/90 border border-border-primary backdrop-blur-xl rounded-2xl p-8 shadow-2xl relative z-10">
         <div className="flex flex-col items-center text-center mb-8">

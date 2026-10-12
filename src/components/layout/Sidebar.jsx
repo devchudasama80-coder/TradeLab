@@ -1,157 +1,92 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard,
-  FlaskConical,
-  Brain,
-  ArrowLeftRight,
-  BarChart3,
+  BarChart2,
+  Cpu,
+  History,
+  PieChart,
   Settings,
   ChevronLeft,
-  ChevronRight,
+  ChevronRight
 } from 'lucide-react';
+import { useState } from 'react';
 
-const iconMap = {
-  LayoutDashboard,
-  FlaskConical,
-  Brain,
-  ArrowLeftRight,
-  BarChart3,
-  Settings,
-};
-
-const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: 'LayoutDashboard' },
-  { name: 'Backtester', href: '/backtester', icon: 'FlaskConical', badge: 'Live' },
-  { name: 'Strategies', href: '/strategies', icon: 'Brain' },
-  { name: 'Trades', href: '/trades', icon: 'ArrowLeftRight' },
-  { name: 'Analytics', href: '/analytics', icon: 'BarChart3' },
-  { name: 'Settings', href: '/settings', icon: 'Settings' },
+const NAV_ITEMS = [
+  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { name: 'Backtester', href: '/backtester', icon: BarChart2, badge: 'Live' },
+  { name: 'Strategies', href: '/strategies', icon: Cpu },
+  { name: 'Trades', href: '/trades', icon: History },
+  { name: 'Analytics', href: '/analytics', icon: PieChart },
+  { name: 'Settings', href: '/settings', icon: Settings }
 ];
 
 export default function Sidebar() {
-  const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <motion.aside
-      animate={{ width: collapsed ? 76 : 260 }}
-      transition={{ duration: 0.25, ease: 'easeInOut' }}
-      className="relative flex flex-col border-r border-border-primary bg-bg-card/90 backdrop-blur-md min-h-screen z-30 select-none"
+    <aside
+      className={`bg-[#0D111A] border-r border-[#1E2638] flex flex-col justify-between transition-all duration-300 h-full flex-shrink-0 select-none z-30 ${
+        collapsed ? 'w-16' : 'w-56'
+      }`}
     >
-      <div className="h-20 flex items-center justify-between px-4 border-b border-border-primary">
-        <Link href="/" className="flex items-center gap-3 overflow-hidden w-full group">
-          <Image
-            src="/logo.png"
-            alt="DC Funded Trader Logo"
-            width={280}
-            height={80}
-            className="h-12 w-auto object-contain shrink-0 group-hover:opacity-90 transition-opacity"
-            priority
-          />
-          <AnimatePresence>
-            {!collapsed && (
-              <motion.span
-                initial={{ opacity: 0, width: 0 }}
-                animate={{ opacity: 1, width: 'auto' }}
-                exit={{ opacity: 0, width: 0 }}
-                transition={{ duration: 0.2 }}
-                className="font-extrabold text-xl tracking-tight whitespace-nowrap text-text-primary shrink-0 group-hover:text-text-primary"
-              >
-                Trade<span className="text-accent-gold">Lab</span>
-              </motion.span>
-            )}
-          </AnimatePresence>
-        </Link>
-      </div>
+      <div className="p-3 space-y-1 overflow-y-auto">
+        <div className="flex items-center justify-between px-3 py-2 mb-2 text-xs font-mono text-[#8B949E]">
+          {!collapsed && <span className="uppercase tracking-wider text-[10px]">Navigation</span>}
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            className="p-1 rounded hover:bg-[#1E2638] text-[#8B949E] hover:text-[#F0F6FC] transition-colors ml-auto"
+            title={collapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
+          >
+            {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+          </button>
+        </div>
 
-      <button
-        type="button"
-        onClick={() => setCollapsed(!collapsed)}
-        className="absolute -right-3 top-24 w-6 h-6 rounded-full bg-bg-secondary border border-border-primary text-text-muted hover:text-text-primary flex items-center justify-center transition-colors z-40 cursor-pointer shadow-md"
-        aria-label="Toggle sidebar width"
-      >
-        {collapsed ? (
-          <ChevronRight className="w-3.5 h-3.5" />
-        ) : (
-          <ChevronLeft className="w-3.5 h-3.5" />
-        )}
-      </button>
-
-      <nav className="flex-1 px-3 py-6 space-y-1.5 overflow-y-auto">
-        {navigation.map((item) => {
-          const Icon = iconMap[item.icon];
-          const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+        {NAV_ITEMS.map((item) => {
+          const Icon = item.icon;
+          const isActive = pathname === item.href;
 
           return (
             <Link
-              key={item.name}
+              key={item.href}
               href={item.href}
-              className={`
-                relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150
-                ${
-                  isActive
-                    ? 'bg-accent-gold/10 text-accent-gold border border-accent-gold/20 font-semibold shadow-sm'
-                    : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
-                }
-              `}
+              className={`flex items-center space-x-3 px-3 py-2.5 rounded-lg text-xs font-medium transition-all ${
+                isActive
+                  ? 'bg-[#1E2638] text-[#F59E0B] border-l-2 border-[#F59E0B] shadow-sm'
+                  : 'text-[#8B949E] hover:text-[#F0F6FC] hover:bg-[#1E2638]/50'
+              }`}
             >
-              <Icon
-                className={`w-5 h-5 shrink-0 ${
-                  isActive ? 'text-accent-gold' : 'text-text-muted group-hover:text-text-primary'
-                }`}
-              />
-
-              <AnimatePresence>
-                {!collapsed && (
-                  <motion.div
-                    initial={{ opacity: 0, width: 0 }}
-                    animate={{ opacity: 1, width: 'auto' }}
-                    exit={{ opacity: 0, width: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="flex-1 flex items-center justify-between overflow-hidden whitespace-nowrap"
-                  >
-                    <span>{item.name}</span>
-                    {item.badge && (
-                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-profit/10 text-profit border border-profit/20">
-                        {item.badge}
-                      </span>
-                    )}
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-[#F59E0B]' : 'text-[#8B949E]'}`} />
+              {!collapsed && (
+                <div className="flex items-center justify-between w-full">
+                  <span className="truncate">{item.name}</span>
+                  {item.badge && (
+                    <span className="text-[9px] bg-[#10B981]/10 text-[#10B981] border border-[#10B981]/30 font-mono px-1.5 py-0.2 rounded font-bold">
+                      {item.badge}
+                    </span>
+                  )}
+                </div>
+              )}
             </Link>
           );
         })}
-      </nav>
-
-      <div className="p-3 border-t border-border-primary">
-        <div
-          className={`flex items-center gap-2.5 px-3 py-2 rounded-lg bg-bg-tertiary/70 border border-border-primary/50 ${
-            collapsed ? 'justify-center' : ''
-          }`}
-        >
-          <div className="relative flex items-center justify-center">
-            <span className="w-2 h-2 rounded-full bg-profit animate-ping absolute" />
-            <span className="w-2 h-2 rounded-full bg-profit relative" />
-          </div>
-          {!collapsed && (
-            <div className="flex flex-col overflow-hidden">
-              <span className="text-xs font-semibold text-text-primary truncate">
-                Engine Active
-              </span>
-              <span className="text-[10px] text-text-muted font-mono">
-                v1.0.0 (JS/WASM)
-              </span>
-            </div>
-          )}
-        </div>
       </div>
-    </motion.aside>
+
+      <div className="p-3 border-t border-[#1E2638]">
+        {!collapsed ? (
+          <div className="flex items-center space-x-2 text-[10px] font-mono text-[#8B949E]">
+            <div className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse" />
+            <span>Engine v2.4 Active</span>
+          </div>
+        ) : (
+          <div className="flex justify-center">
+            <div className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse" />
+          </div>
+        )}
+      </div>
+    </aside>
   );
 }
