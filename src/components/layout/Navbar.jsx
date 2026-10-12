@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { TrendingUp, TrendingDown, User, LogOut, ShieldCheck, Activity } from 'lucide-react';
+import { TrendingUp, TrendingDown, LogOut, Activity } from 'lucide-react';
 
 export default function Navbar() {
   const router = useRouter();
@@ -16,10 +16,11 @@ export default function Navbar() {
   });
 
   useEffect(() => {
+    let isMounted = true;
     async function checkAuth() {
       try {
         const res = await fetch('/api/auth/me');
-        if (res.ok) {
+        if (res.ok && isMounted) {
           const data = await res.json();
           if (data.authenticated) {
             setUser(data.user);
@@ -28,11 +29,11 @@ export default function Navbar() {
       } catch (err) {}
     }
     checkAuth();
+    return () => { isMounted = false; };
   }, []);
 
   useEffect(() => {
     let isMounted = true;
-
     async function fetchLiveBtcPrice() {
       try {
         const res = await fetch('/api/market-data?ticker=true');
@@ -55,10 +56,8 @@ export default function Navbar() {
         }
       } catch (err) {}
     }
-
     fetchLiveBtcPrice();
     const interval = setInterval(fetchLiveBtcPrice, 10000);
-
     return () => {
       isMounted = false;
       clearInterval(interval);
@@ -75,8 +74,8 @@ export default function Navbar() {
   }
 
   return (
-    <header className="h-16 border-b border-[#1E2638] bg-[#07090E]/90 backdrop-blur-md sticky top-0 z-40 px-4 md:px-8 flex items-center justify-between">
-      <div className="flex items-center space-x-6">
+    <header className="h-14 md:h-16 border-b border-[#1E2638] bg-[#07090E]/90 backdrop-blur-md sticky top-0 z-40 px-3 md:px-8 flex items-center justify-between">
+      <div className="flex items-center">
         <Link href="/" className="flex items-center">
           <Image
             src="/logo.png"
@@ -84,29 +83,29 @@ export default function Navbar() {
             width={280}
             height={70}
             priority
-            className="h-9 md:h-11 w-auto object-contain"
+            className="h-6 sm:h-8 md:h-11 w-auto object-contain"
           />
         </Link>
       </div>
 
-      <div className="flex items-center space-x-4 md:space-x-6">
-        <div className="hidden sm:flex items-center space-x-3 bg-[#0D111A] border border-[#1E2638] px-3.5 py-1.5 rounded-lg text-xs font-mono">
-          <div className="flex items-center space-x-1.5">
+      <div className="flex items-center space-x-2 md:space-x-6">
+        <div className="flex items-center space-x-2 md:space-x-3 bg-[#0D111A] border border-[#1E2638] px-2 py-1 md:px-3.5 md:py-1.5 rounded-lg text-[10px] md:text-xs font-mono">
+          <div className="hidden sm:flex items-center space-x-1.5">
             <Activity className="w-3.5 h-3.5 text-[#F59E0B] animate-pulse" />
             <span className="text-[#8B949E] font-medium">BTC/USD</span>
           </div>
           <span className="text-[#F0F6FC] font-bold">${btcPrice.price}</span>
           <span
-            className={`flex items-center font-bold px-1.5 py-0.5 rounded ${
+            className={`flex items-center font-bold px-1 md:px-1.5 py-0.5 rounded ${
               btcPrice.isPositive
                 ? 'text-[#10B981] bg-[#10B981]/10'
                 : 'text-[#EF4444] bg-[#EF4444]/10'
             }`}
           >
             {btcPrice.isPositive ? (
-              <TrendingUp className="w-3 h-3 mr-1 inline" />
+              <TrendingUp className="w-2.5 h-2.5 md:w-3 md:h-3 mr-0.5 md:mr-1 inline" />
             ) : (
-              <TrendingDown className="w-3 h-3 mr-1 inline" />
+              <TrendingDown className="w-2.5 h-2.5 md:w-3 md:h-3 mr-0.5 md:mr-1 inline" />
             )}
             {btcPrice.change}%
           </span>
@@ -120,23 +119,22 @@ export default function Navbar() {
             </div>
             <button
               onClick={handleLogout}
-              title="Sign Out"
-              className="p-2 rounded-lg bg-[#0D111A] border border-[#1E2638] text-[#8B949E] hover:text-[#EF4444] hover:border-[#EF4444]/40 transition-colors"
+              className="p-1.5 md:p-2 rounded-lg bg-[#0D111A] border border-[#1E2638] text-[#8B949E] hover:text-[#EF4444] hover:border-[#EF4444]/40 transition-colors"
             >
-              <LogOut className="w-4 h-4" />
+              <LogOut className="w-4 h-4 md:w-4 md:h-4" />
             </button>
           </div>
         ) : (
-          <div className="flex items-center space-x-3 text-xs font-medium">
+          <div className="flex items-center space-x-2 md:space-x-3 text-[10px] md:text-xs font-medium">
             <Link
               href="/login"
-              className="text-[#8B949E] hover:text-[#F0F6FC] transition-colors px-3 py-1.5"
+              className="hidden sm:block text-[#8B949E] hover:text-[#F0F6FC] transition-colors px-2 py-1.5"
             >
               Sign In
             </Link>
             <Link
               href="/register"
-              className="bg-gradient-to-r from-[#F59E0B] to-[#D97706] text-[#07090E] font-bold px-3.5 py-1.5 rounded-lg shadow-sm hover:brightness-110 transition-all"
+              className="bg-gradient-to-r from-[#F59E0B] to-[#D97706] text-[#07090E] font-bold px-2 py-1.5 md:px-3.5 md:py-1.5 rounded-lg shadow-sm hover:brightness-110 transition-all"
             >
               Get Started
             </Link>
